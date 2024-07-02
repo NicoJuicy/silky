@@ -43,13 +43,21 @@ namespace Silky.Http.Identity.Authentication.Handlers
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             var token = GetAuthorizationToken(Context);
-            if (token.IsNullOrEmpty())
-            {
-                return AuthenticateResult.Fail(new AuthenticationException("You have not logged in to the system."));
-            }
+            var serviceEntryDescriptor = Context.GetServiceEntryDescriptor();
 
             try
             {
+                if (serviceEntryDescriptor.IsAllowAnonymous && token.IsNullOrEmpty())
+                {
+                    return AuthenticateResult.NoResult();
+                }
+
+                if (token.IsNullOrEmpty())
+                {
+                    return AuthenticateResult.Fail(
+                        new AuthenticationException("You have not logged in to the system."));
+                }
+
                 if (_gatewayOptions.JwtSecret.IsNullOrEmpty())
                 {
                     return AuthenticateResult.Fail(new AuthenticationException(
@@ -62,6 +70,11 @@ namespace Silky.Http.Identity.Authentication.Handlers
             }
             catch (TokenExpiredException ex)
             {
+                if (serviceEntryDescriptor.IsAllowAnonymous)
+                {
+                    return AuthenticateResult.NoResult();
+                }
+
                 Context.Response.SetResultStatusCode(StatusCode.UnAuthentication);
                 throw new AuthenticationException("Token has expired");
             }
